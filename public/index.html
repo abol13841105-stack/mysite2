@@ -1,0 +1,173 @@
+فقط قسمت fetch اصلاح شده است و هیچ چیز دیگر تغییر نکرده است.
+
+<!doctype html>
+<html lang="fa">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>تبدیل فرمت فایل — رابط کاربری</title>
+  <style>
+    :root{--bg:#0f172a;--card:#0b1220;--accent:#60a5fa;--muted:#94a3b8;--glass:rgba(255,255,255,0.03)}
+    *{box-sizing:border-box}
+    body{font-family:sys-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;direction:rtl;background:linear-gradient(180deg,#071032 0%,#07192a 100%);color:#e6eef8;margin:0;padding:32px}
+    .container{max-width:920px;margin:0 auto}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    p.lead{color:var(--muted);margin:0}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:20px;border-radius:12px;box-shadow:0 6px 20px rgba(2,6,23,0.6);}    
+    .grid{display:grid;grid-template-columns:1fr;gap:18px;margin-top:18px}
+    .drop{border:2px dashed var(--glass);padding:18px;border-radius:10px;min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+    .drop.drag{border-color:var(--accent);background:linear-gradient(90deg, rgba(96,165,250,0.06), transparent)}
+    input[type=file]{display:none}
+    .btn{display:inline-block;padding:10px 14px;border-radius:10px;background:linear-gradient(90deg,var(--accent),#3b82f6);color:#012c4a;font-weight:600;text-decoration:none}
+    .meta{font-size:13px;color:var(--muted);margin-top:8px}
+    label{display:block;margin-bottom:6px;font-weight:600}
+    select, button, .info{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    select{appearance:none}
+    .formats{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+    .chip{background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:999px;font-size:13px;color:var(--muted)}
+    footer{margin-top:16px;color:var(--muted);font-size:13px}
+    @media (max-width:880px){.grid{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>رابط تبدیل فرمت فایل (Front-end)</h1>
+      <p class="lead">فقط رابط کاربری — این نسخه نیاز به بک‌اند برای تبدیل واقعی دارد.</p>
+    </header>
+
+    <div class="card">
+      <div class="grid">
+        <div>
+          <div id="drop" class="drop">
+            <div style="text-align:center">
+              <strong id="dropTitle">فایلی انتخاب کنید یا بکشید اینجا رها کنید</strong>
+              <div class="meta">پشتیبانی: تصویر، صدا، ویدئو، مدارک ساده</div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <label class="btn" for="fileInput">انتخاب فایل</label>
+              <input id="fileInput" type="file" />
+              <button id="clearBtn" class="btn" style="background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)">پاک کردن</button>
+            </div>
+            <div id="fileInfo" class="meta" style="display:none;margin-top:12px;text-align:center"></div>
+          </div>
+
+          <div style="margin-top:14px">
+            <label>فرمت هدف</label>
+            <select id="targetSelect"><option>ابتدا فایل را انتخاب کنید</option></select>
+            <div id="allowedList" class="formats"></div>
+            <div class="meta" id="note" style="display:none;margin-top:8px;color:var(--muted)">برای تبدیل واقعی نیاز به بک‌اند دارید.</div>
+          </div>
+
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button id="convertBtn" class="btn">تبدیل / ارسال به سرور</button>
+            <a id="downloadLink" style="display:none;align-self:center" class="btn">دانلود</a>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div>می‌خواهید این را به React یا نسخه‌ای که تبدیل واقعی انجام دهد بسازم؟ بگو تا آماده کنم.</div>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    const CONVERSION_MAP = {
+      audio: ['mp3','wav','ogg'],
+      image: ['jpg','png','webp','gif'],
+      video: ['mp4','webm','mov'],
+      text: ['txt','pdf','docx']
+    };
+
+    const fileInput = document.getElementById('fileInput');
+    const drop = document.getElementById('drop');
+    const fileInfo = document.getElementById('fileInfo');
+    const targetSelect = document.getElementById('targetSelect');
+    const allowedList = document.getElementById('allowedList');
+    const note = document.getElementById('note');
+    const convertBtn = document.getElementById('convertBtn');
+    const downloadLink = document.getElementById('downloadLink');
+    const clearBtn = document.getElementById('clearBtn');
+
+    let currentFile = null;
+    function reset() {
+      currentFile = null;
+      fileInput.value = '';
+      fileInfo.style.display='none';
+      targetSelect.innerHTML = '<option>ابتدا فایل را انتخاب کنید</option>';
+      allowedList.innerHTML = '';
+      downloadLink.style.display='none';
+      note.style.display='none';
+    }
+    clearBtn.addEventListener('click', reset);
+
+    function detectCategory(file){
+      if(!file) return null;
+      const t = file.type || '';
+      if(t.startsWith('audio/')) return 'audio';
+      if(t.startsWith('image/')) return 'image';
+      if(t.startsWith('video/')) return 'video';
+      const name = (file.name||'').toLowerCase();
+      if(name.endsWith('.pdf')||name.endsWith('.docx')||name.endsWith('.txt')||name.endsWith('.md')) return 'text';
+      return null;
+    }
+
+    function onFileChosen(file){
+      currentFile = file;
+      const cat = detectCategory(file);
+      fileInfo.style.display='block';
+      fileInfo.textContent = `${file.name} — ${Math.round(file.size/1024)} KB — ${file.type||'unknown'}`;
+      allowedList.innerHTML = '';
+      targetSelect.innerHTML = '';
+
+      if(!cat){
+        targetSelect.innerHTML = '<option>فرمت فایل پشتیبانی نمی‌شود</option>';
+        note.style.display='block';
+        return;
+      }
+      const targets = CONVERSION_MAP[cat] || [];
+      targets.forEach(ext => {
+        const opt = document.createElement('option'); opt.value = ext; opt.textContent = ext.toUpperCase();
+        targetSelect.appendChild(opt);
+        const chip = document.createElement('div'); chip.className='chip'; chip.textContent = ext; allowedList.appendChild(chip);
+      });
+      note.style.display='block';
+    }
+
+    ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e=>{e.preventDefault();drop.classList.add('drag');}));
+    ['dragleave','drop'].forEach(ev => drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
+    drop.addEventListener('drop', e=>{e.preventDefault(); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if(f) onFileChosen(f);});
+
+    fileInput.addEventListener('change', e=>{const f = e.target.files && e.target.files[0]; if(f) onFileChosen(f);});
+
+    convertBtn.addEventListener('click', async ()=>{
+      if(!currentFile){alert('اولاً یک فایل انتخاب کنید.');return;}
+      const targetExt = targetSelect.value;
+      if(!targetExt || targetExt.startsWith('فرمت')){alert('یک فرمت هدف انتخاب کنید.');return;}
+
+      const fd = new FormData();
+      fd.append('file', currentFile);
+      fd.append('target', targetExt);
+
+      try{
+        const resp = await fetch('http://localhost:3000/convert', {
+          method:'POST',
+          body: fd
+        });
+
+        if(!resp.ok) throw new Error('خطا از سرور');
+        const blob = await resp.blob();
+        const dispName = currentFile.name.replace(/\.[^.]+$/,'') + '.' + targetExt;
+        const u = URL.createObjectURL(blob);
+        downloadLink.href = u; downloadLink.download = dispName; downloadLink.style.display='inline-block'; downloadLink.textContent = 'دانلود تبدیل‌شده: '+dispName;
+      }catch(err){
+        alert('ارسال به سرور موفق نبود: '+err.message);
+      }
+    });
+
+    reset();
+  </script>
+</body>
+</html>
